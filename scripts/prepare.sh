@@ -2,7 +2,7 @@
 # @Author: zhkong
 # @Date: 2023-07-25 17:07:02
  # @LastEditors: zhkong
- # @LastEditTime: 2024-11-10 17:21:21
+ # @LastEditTime: 2024-11-13 00:50:33
  # @FilePath: /build-x86-openwrt/scripts/prepare.sh
 ###
 
@@ -14,6 +14,11 @@ cd openwrt
 # 更新 Feeds
 ./scripts/feeds update -a
 ./scripts/feeds install -a
+
+mkdir temp
+git clone https://github.com/immortalwrt/luci.git --single-branch --depth 1 temp/luci
+git clone https://github.com/immortalwrt/packages.git --single-branch --depth 1 temp/packages
+# git clone https://github.com/immortalwrt/immortalwrt.git --single-branch --depth 1 temp/immortalwrt
 
 # 添加第三方软件包
 ## openclash
@@ -32,6 +37,8 @@ sed -i 's/..\/..\/luci.mk/$(TOPDIR)\/feeds\/luci\/luci.mk/g' package/new/luci-ap
 ## MOSDNS
 # remove v2ray-geodata package from feeds (openwrt-22.03 & master)
 rm -rf feeds/packages/net/v2ray-geodata
+rm -rf feeds/packages/lang/golang
+git clone https://github.com/sbwml/packages_lang_golang -b 23.x feeds/packages/lang/golang
 git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/mosdns
 git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
 
