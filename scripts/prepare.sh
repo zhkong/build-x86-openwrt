@@ -2,7 +2,7 @@
 # @Author: zhkong
 # @Date: 2023-07-25 17:07:02
  # @LastEditors: zhkong
- # @LastEditTime: 2024-11-13 00:50:33
+ # @LastEditTime: 2024-11-13 11:57:01
  # @FilePath: /build-x86-openwrt/scripts/prepare.sh
 ###
 
@@ -57,8 +57,8 @@ git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
 bash ../scripts/preset-terminal-tools.sh
 
 # config file
-# cp ../config/x86 .config
-# make defconfig
+cp ../config/x86.config .config
+make defconfig
 
 rm -rf temp
 

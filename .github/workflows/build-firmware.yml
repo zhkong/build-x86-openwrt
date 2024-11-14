@@ -84,9 +84,8 @@ jobs:
       run: |
         rm -rf ./artifact/
         mkdir -p ./artifact/
-        mv openwrt/bin/targets/qualcommax/ipq807x/openwrt-qualcommax-ipq807x-redmi_ax6-initramfs-factory.ubi ./artifact/
-        mv openwrt/bin/targets/qualcommax/ipq807x/openwrt-qualcommax-ipq807x-redmi_ax6-squashfs-sysupgrade.bin ./artifact/
-        mv openwrt/bin/targets/qualcommax/ipq807x/config.buildinfo ./artifact/
+        mv openwrt/bin/targets/x86/64/openwrt-*gz ./artifact/
+        mv openwrt/bin/targets/x86/64/config.buildinfo ./artifact/
         cd ./artifact/
         ls -Ahl
     - name: Upload artifact
@@ -99,9 +98,9 @@ jobs:
       id: create_release
       uses: ncipollo/release-action@v1.14.0
       with:
-        name: redmi-ax6-${{ env.tag_name }}-${{ env.LAST_COMMIT_HASH }}
+        name: ${{ env.tag_name }}
         allowUpdates: true
-        tag: ${{ env.tag_name }}-${{ env.LAST_COMMIT_HASH }}
+        tag: ${{ env.tag_name }}
         replacesArtifacts: true
         token: ${{ secrets.GITHUB_TOKEN }}
         artifacts: ./artifact/*
