@@ -2,7 +2,7 @@
 # @Author: zhkong
 # @Date: 2023-07-25 17:07:02
  # @LastEditors: zhkong
- # @LastEditTime: 2024-11-13 11:57:01
+ # @LastEditTime: 2025-11-14 15:22:18
  # @FilePath: /build-x86-openwrt/scripts/prepare.sh
 ###
 
@@ -11,16 +11,9 @@ LATEST_TAG=$(curl -s https://api.github.com/repos/openwrt/openwrt/releases/lates
 git clone https://github.com/openwrt/openwrt.git -b $LATEST_TAG --single-branch openwrt --depth 1
 cd openwrt
 
-# 更新 Feeds
-./scripts/feeds update -a
-./scripts/feeds install -a
+# ## openwrt-nikki
+# echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> feeds.conf.default
 
-mkdir temp
-git clone https://github.com/immortalwrt/luci.git --single-branch --depth 1 temp/luci
-git clone https://github.com/immortalwrt/packages.git --single-branch --depth 1 temp/packages
-# git clone https://github.com/immortalwrt/immortalwrt.git --single-branch --depth 1 temp/immortalwrt
-
-# 添加第三方软件包
 ## openclash
 git clone https://github.com/vernesong/OpenClash.git --single-branch --depth 1 package/new/luci-openclash
 bash ../scripts/download-openclash-core.sh
@@ -28,30 +21,9 @@ bash ../scripts/download-openclash-core.sh
 ## argon theme
 git clone https://github.com/jerrykuku/luci-theme-argon.git --single-branch --depth 1 package/new/luci-theme-argon
 
-## KMS激活
-mv temp/luci/applications/luci-app-vlmcsd package/new/luci-app-vlmcsd
-mv temp/packages/net/vlmcsd package/new/vlmcsd
-# edit package/new/luci-app-vlmcsd/Makefile
-sed -i 's/..\/..\/luci.mk/$(TOPDIR)\/feeds\/luci\/luci.mk/g' package/new/luci-app-vlmcsd/Makefile
-
-## MOSDNS
-# remove v2ray-geodata package from feeds (openwrt-22.03 & master)
-rm -rf feeds/packages/net/v2ray-geodata
-rm -rf feeds/packages/lang/golang
-git clone https://github.com/sbwml/packages_lang_golang -b 23.x feeds/packages/lang/golang
-git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/mosdns
-git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
-
-
-# rm -rf feeds/luci/modules/luci-base
-# rm -rf feeds/luci/modules/luci-mod-status
-# rm -rf feeds/packages/utils/coremark
-# rm -rf package/emortal/default-settings
-
-# mv temp/luci/modules/luci-base feeds/luci/modules/luci-base
-# mv temp/luci/modules/luci-mod-status feeds/luci/modules/luci-mod-status
-# mv temp/packages/utils/coremark package/new/coremark
-# mv temp/immortalwrt/package/emortal/default-settings package/new/default-settings
+# 更新 Feeds
+./scripts/feeds update -a
+./scripts/feeds install -a
 
 # 增加 oh-my-zsh
 bash ../scripts/preset-terminal-tools.sh
