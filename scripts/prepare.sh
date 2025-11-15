@@ -2,7 +2,7 @@
 # @Author: zhkong
 # @Date: 2023-07-25 17:07:02
  # @LastEditors: zhkong
- # @LastEditTime: 2025-11-14 15:22:18
+ # @LastEditTime: 2025-11-15 23:58:31
  # @FilePath: /build-x86-openwrt/scripts/prepare.sh
 ###
 
@@ -11,12 +11,12 @@ LATEST_TAG=$(curl -s https://api.github.com/repos/openwrt/openwrt/releases/lates
 git clone https://github.com/openwrt/openwrt.git -b $LATEST_TAG --single-branch openwrt --depth 1
 cd openwrt
 
-# ## openwrt-nikki
-# echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> feeds.conf.default
+## openwrt-nikki
+echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> feeds.conf.default
 
 ## openclash
-git clone https://github.com/vernesong/OpenClash.git --single-branch --depth 1 package/new/luci-openclash
-bash ../scripts/download-openclash-core.sh
+# git clone https://github.com/vernesong/OpenClash.git --single-branch --depth 1 package/new/luci-openclash
+# bash ../scripts/download-openclash-core.sh
 
 ## argon theme
 git clone https://github.com/jerrykuku/luci-theme-argon.git --single-branch --depth 1 package/new/luci-theme-argon
@@ -31,6 +31,8 @@ bash ../scripts/preset-terminal-tools.sh
 # config file
 cp ../config/x86.config .config
 make defconfig
+
+cp ../files ./
 
 rm -rf temp
 
