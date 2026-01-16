@@ -21,22 +21,31 @@ get_immortalwrt_version() {
     local version=""
     
     # 从环境变量或文件获取版本
-    if [ -n "$IMMORTALWRT_TAG" ]; then
+    if [ -n "$IMMORTALWRT_TAG" ] && [ "$IMMORTALWRT_TAG" != "null" ]; then
         version="$IMMORTALWRT_TAG"
     elif [ -f /tmp/immortalwrt_tag.txt ]; then
         version=$(cat /tmp/immortalwrt_tag.txt)
-    else
+        # 检查文件内容是否为 null
+        if [ "$version" = "null" ] || [ -z "$version" ]; then
+            version=""
+        fi
+    fi
+    
+    # 如果还是为空，尝试获取最新版本
+    if [ -z "$version" ] || [ "$version" = "null" ]; then
         # 获取最新的稳定版本
         echo "正在获取最新 ImmortalWrt 版本..." >&2
         version=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/releases/latest | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/' | head -n 1)
         
-        if [ -z "$version" ]; then
+        # 检查是否为 null
+        if [ -z "$version" ] || [ "$version" = "null" ]; then
             # 备用方案：从下载页面获取
+            echo "GitHub API 返回无效版本，从下载页面获取..." >&2
             version=$(curl -s https://downloads.immortalwrt.org/releases/ | grep -oP 'href="\K[0-9]+\.[0-9]+\.[0-9]+(?=/")' | sort -V | tail -n 1)
         fi
         
         # 最终备用
-        if [ -z "$version" ]; then
+        if [ -z "$version" ] || [ "$version" = "null" ]; then
             version="24.10.0"
             echo "警告: 无法获取最新版本，使用默认版本 $version" >&2
         fi
@@ -44,6 +53,13 @@ get_immortalwrt_version() {
     
     # 清理版本号（移除 'v' 前缀如果存在）
     version="${version#v}"
+    
+    # 最终验证版本号不为 null
+    if [ -z "$version" ] || [ "$version" = "null" ]; then
+        echo "错误: 版本号无效 (null 或空)" >&2
+        exit 1
+    fi
+    
     echo "$version"
 }
 
@@ -55,8 +71,23 @@ download_imagebuilder() {
     version="${version#v}"
     version="${version#v.}"
     
+    # 验证版本号不为 null 或空
+    if [ -z "$version" ] || [ "$version" = "null" ]; then
+        echo "错误: 传入的版本号为 null 或空" >&2
+        echo "尝试从下载页面获取可用版本..." >&2
+        
+        # 从下载页面获取最新的可用版本
+        version=$(curl -s "https://downloads.immortalwrt.org/releases/" | grep -oP 'href="\K[0-9]+\.[0-9]+\.[0-9]+(?=/")' | sort -V | tail -n 1)
+        
+        if [ -z "$version" ] || [ "$version" = "null" ]; then
+            version="24.10.0"
+            echo "警告: 无法获取版本号，使用默认版本: $version" >&2
+        else
+            echo "从下载页面获取到可用版本: $version" >&2
+        fi
+    fi
+    
     # 如果版本号包含额外的字符（如 -rc1, -snapshot 等），尝试提取主要版本号
-    # 首先尝试直接使用，如果失败再从下载页面获取可用版本
     local clean_version=$(echo "$version" | sed -E 's/(-rc[0-9]+|-snapshot|-dev|-[a-zA-Z0-9]+)$//')
     
     # 检查是否是标准版本号格式（如 24.10.0）
@@ -67,11 +98,16 @@ download_imagebuilder() {
         # 从下载页面获取最新的可用版本
         local available_version=$(curl -s "https://downloads.immortalwrt.org/releases/" | grep -oP 'href="\K[0-9]+\.[0-9]+\.[0-9]+(?=/")' | sort -V | tail -n 1)
         
-        if [ -n "$available_version" ]; then
+        if [ -n "$available_version" ] && [ "$available_version" != "null" ]; then
             echo "从下载页面获取到可用版本: $available_version" >&2
             clean_version="$available_version"
         else
             echo "无法从下载页面获取版本，使用清理后的版本: $clean_version" >&2
+            # 如果清理后的版本还是不对，使用默认版本
+            if ! echo "$clean_version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                clean_version="24.10.0"
+                echo "使用默认版本: $clean_version" >&2
+            fi
         fi
     fi
     

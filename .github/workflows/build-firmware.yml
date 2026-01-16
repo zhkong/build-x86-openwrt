@@ -35,6 +35,22 @@ jobs:
         else
           LATEST_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/releases/latest | jq -r .tag_name)
         fi
+        
+        # 验证版本号是否有效（不为 null 或空）
+        if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+          echo "警告: GitHub API 返回的版本号无效，从下载页面获取..." >&2
+          # 从下载页面获取最新可用版本
+          LATEST_TAG=$(curl -s https://downloads.immortalwrt.org/releases/ | grep -oP 'href="\K[0-9]+\.[0-9]+\.[0-9]+(?=/")' | sort -V | tail -n 1)
+          
+          # 如果还是获取不到，使用默认版本
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            LATEST_TAG="24.10.0"
+            echo "警告: 无法获取版本号，使用默认版本: $LATEST_TAG" >&2
+          else
+            echo "从下载页面获取到版本: $LATEST_TAG" >&2
+          fi
+        fi
+        
         echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
         
         # 尝试获取上次构建记录的 tag
