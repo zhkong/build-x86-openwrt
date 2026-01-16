@@ -50,31 +50,109 @@ get_immortalwrt_version() {
 # ==================== 下载 ImageBuilder ====================
 download_imagebuilder() {
     local version="$1"
-    local url="https://downloads.immortalwrt.org/releases/${version}/targets/${TARGET}/${SUBTARGET}/immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.zst"
-    local filename="immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.zst"
+    
+    # 清理版本号：移除可能的前缀（v, v., 等）
+    version="${version#v}"
+    version="${version#v.}"
+    
+    # 如果版本号包含额外的字符（如 -rc1, -snapshot 等），尝试提取主要版本号
+    # 首先尝试直接使用，如果失败再从下载页面获取可用版本
+    local clean_version=$(echo "$version" | sed -E 's/(-rc[0-9]+|-snapshot|-dev|-[a-zA-Z0-9]+)$//')
+    
+    # 检查是否是标准版本号格式（如 24.10.0）
+    if ! echo "$clean_version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "警告: 版本号格式可能不正确: $version -> $clean_version" >&2
+        echo "尝试从下载页面获取可用版本..." >&2
+        
+        # 从下载页面获取最新的可用版本
+        local available_version=$(curl -s "https://downloads.immortalwrt.org/releases/" | grep -oP 'href="\K[0-9]+\.[0-9]+\.[0-9]+(?=/")' | sort -V | tail -n 1)
+        
+        if [ -n "$available_version" ]; then
+            echo "从下载页面获取到可用版本: $available_version" >&2
+            clean_version="$available_version"
+        else
+            echo "无法从下载页面获取版本，使用清理后的版本: $clean_version" >&2
+        fi
+    fi
+    
+    version="$clean_version"
     
     mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
     
     echo "==========================================" >&2
     echo "下载 ImmortalWrt ImageBuilder ${version}..." >&2
-    echo "URL: $url" >&2
+    echo "目标平台: ${TARGET}/${SUBTARGET}" >&2
     echo "==========================================" >&2
     
-    if [ ! -f "$filename" ]; then
-        # 尝试下载 .zst 格式
-        if ! curl -L -f -o "$filename" "$url" 2>/dev/null; then
-            # 如果 .zst 不存在，尝试 .tar.xz
-            url="https://downloads.immortalwrt.org/releases/${version}/targets/${TARGET}/${SUBTARGET}/immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.xz"
-            filename="immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.xz"
-            echo "尝试备用格式: $url" >&2
-            if ! curl -L -f -o "$filename" "$url"; then
-                echo "错误: 无法下载 ImageBuilder（已尝试 .tar.zst 和 .tar.xz 格式）" >&2
-                exit 1
-            fi
+    # 先检查版本目录是否存在
+    local version_url="https://downloads.immortalwrt.org/releases/${version}/targets/${TARGET}/${SUBTARGET}/"
+    echo "检查版本目录: $version_url" >&2
+    
+    # 尝试列出可用文件（用于调试）
+    if curl -s -f "$version_url" > /dev/null 2>&1; then
+        echo "版本目录存在，查找 ImageBuilder 文件..." >&2
+    else
+        echo "警告: 版本目录可能不存在，将直接尝试下载..." >&2
+    fi
+    
+    # 构建可能的文件名
+    local base_name="immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64"
+    local filename_zst="${base_name}.tar.zst"
+    local filename_xz="${base_name}.tar.xz"
+    local url_zst="https://downloads.immortalwrt.org/releases/${version}/targets/${TARGET}/${SUBTARGET}/${filename_zst}"
+    local url_xz="https://downloads.immortalwrt.org/releases/${version}/targets/${TARGET}/${SUBTARGET}/${filename_xz}"
+    
+    local filename=""
+    local url=""
+    local download_success=false
+    
+    # 尝试下载 .zst 格式
+    if [ ! -f "$filename_zst" ]; then
+        echo "尝试下载: $url_zst" >&2
+        if curl -L -f -o "$filename_zst" "$url_zst" 2>/dev/null; then
+            filename="$filename_zst"
+            url="$url_zst"
+            download_success=true
+            echo "成功下载 .zst 格式文件" >&2
+        else
+            echo ".zst 格式下载失败 (404 或其他错误)" >&2
         fi
     else
-        echo "ImageBuilder 已存在，跳过下载" >&2
+        filename="$filename_zst"
+        download_success=true
+        echo "ImageBuilder .zst 文件已存在，跳过下载" >&2
+    fi
+    
+    # 如果 .zst 失败，尝试 .xz 格式
+    if [ "$download_success" != "true" ]; then
+        if [ ! -f "$filename_xz" ]; then
+            echo "尝试下载: $url_xz" >&2
+            if curl -L -f -o "$filename_xz" "$url_xz" 2>/dev/null; then
+                filename="$filename_xz"
+                url="$url_xz"
+                download_success=true
+                echo "成功下载 .xz 格式文件" >&2
+            else
+                echo ".xz 格式下载失败 (404 或其他错误)" >&2
+            fi
+        else
+            filename="$filename_xz"
+            download_success=true
+            echo "ImageBuilder .xz 文件已存在，跳过下载" >&2
+        fi
+    fi
+    
+    # 如果都失败了，尝试列出目录查看可用文件
+    if [ "$download_success" != "true" ]; then
+        echo "错误: 无法下载 ImageBuilder" >&2
+        echo "尝试的 URL:" >&2
+        echo "  - $url_zst" >&2
+        echo "  - $url_xz" >&2
+        echo "" >&2
+        echo "尝试列出目录内容以查找可用文件..." >&2
+        curl -s "$version_url" 2>/dev/null | grep -i "imagebuilder" | head -10 >&2 || true
+        exit 1
     fi
     
     # 验证文件是否存在且不为空
