@@ -129,7 +129,7 @@ fi
 EOF
     chmod +x "$FILES_DIR/etc/profile.d/99-utf8-terminal.sh"
     
-    # 创建 UCI defaults 脚本设置系统语言
+    # 创建 UCI defaults 脚本设置系统语言和主题
     mkdir -p "$FILES_DIR/etc/uci-defaults"
     cat > "$FILES_DIR/etc/uci-defaults/99-set-chinese-locale" << 'UCIEOF'
 #!/bin/sh
@@ -138,9 +138,13 @@ export LANG=zh_CN.UTF-8
 export LC_ALL=zh_CN.UTF-8
 export LANGUAGE=zh_CN:zh:en_US:en
 
-# 如果 /etc/config/luci 存在，设置语言
+# 如果 /etc/config/luci 存在，设置语言和主题
 if [ -f /etc/config/luci ]; then
     uci set luci.main.lang=zh_cn 2>/dev/null || true
+    # 设置默认主题为 argon
+    if uci get luci.main.mediaurlbase >/dev/null 2>&1; then
+        uci set luci.main.mediaurlbase='/luci-static/argon' 2>/dev/null || true
+    fi
     uci commit luci 2>/dev/null || true
 fi
 
@@ -149,6 +153,7 @@ UCIEOF
     chmod +x "$FILES_DIR/etc/uci-defaults/99-set-chinese-locale"
     
     echo "  ✓ 中文语言环境配置完成"
+    echo "  ✓ 已设置 Argon 为默认主题"
 }
 
 # 创建默认 .zshrc
