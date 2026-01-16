@@ -29,11 +29,33 @@ jobs:
     - name: Check for new ImmortalWrt release
       id: check
       run: |
-        # 获取最新的 ImmortalWrt release tag
+        # 获取最新的 ImmortalWrt tag（ImmortalWrt 没有 releases，只有 tags）
         if [ -n "${{ github.event.inputs.force_tag }}" ]; then
           LATEST_TAG="${{ github.event.inputs.force_tag }}"
         else
-          LATEST_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/releases/latest | jq -r .tag_name)
+          # 从 GitHub API 获取所有 tags，找到最新的版本号格式的 tag
+          # ImmortalWrt 的 tags 格式类似 v24.10.5 或 24.10.5
+          echo "正在从 GitHub API 获取最新的 ImmortalWrt tag..." >&2
+          
+          # 获取所有 tags，过滤出符合版本号格式的，排序后取最新的
+          LATEST_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/tags | \
+            jq -r '.[].name' | \
+            grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | \
+            sed 's/^v//' | \
+            sort -V | \
+            tail -n 1)
+          
+          # 如果获取不到，尝试从 refs/tags 获取
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+            echo "从 tags API 获取失败，尝试从 refs/tags 获取..." >&2
+            LATEST_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/git/refs/tags | \
+              jq -r '.[].ref' | \
+              sed 's|refs/tags/||' | \
+              grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | \
+              sed 's/^v//' | \
+              sort -V | \
+              tail -n 1)
+          fi
         fi
         
         # 验证版本号是否有效（不为 null 或空）
@@ -49,6 +71,8 @@ jobs:
           else
             echo "从下载页面获取到版本: $LATEST_TAG" >&2
           fi
+        else
+          echo "从 GitHub tags 获取到版本: $LATEST_TAG" >&2
         fi
         
         echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
