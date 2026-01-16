@@ -7,7 +7,14 @@
 ###
 
 # get latest openwrt tag
-LATEST_TAG=$(curl -s https://api.github.com/repos/openwrt/openwrt/releases/latest | grep 'tag_name' | cut -d\" -f4)
+# 如果环境变量 OPENWRT_TAG 已设置，使用它；否则获取最新 release
+if [ -n "$OPENWRT_TAG" ]; then
+  LATEST_TAG="$OPENWRT_TAG"
+  echo "Using specified OpenWrt tag: $LATEST_TAG"
+else
+  LATEST_TAG=$(curl -s https://api.github.com/repos/openwrt/openwrt/releases/latest | grep 'tag_name' | cut -d\" -f4)
+  echo "Using latest OpenWrt tag: $LATEST_TAG"
+fi
 git clone https://github.com/openwrt/openwrt.git -b $LATEST_TAG --single-branch openwrt --depth 1
 cd openwrt
 

@@ -1,16 +1,83 @@
 name: X86 OpenWRT Build
 
 on:
-#  schedule:
-#    - cron: 5 6 * * 0
+  # 每天 UTC 时间凌晨 2 点检查是否有新 release
+  schedule:
+    - cron: '0 2 * * *'
+  # 允许手动触发
+  workflow_dispatch:
+    inputs:
+      force_tag:
+        description: '强制使用指定 tag (可选，留空则使用最新 release)'
+        required: false
+        type: string
   push:
   watch:
     types: started
 
 jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    outputs:
+      latest_tag: ${{ steps.check.outputs.latest_tag }}
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+      with:
+        fetch-depth: 1
+    - name: Check for new OpenWrt release
+      id: check
+      run: |
+        # 获取最新的 OpenWrt release tag
+        if [ -n "${{ github.event.inputs.force_tag }}" ]; then
+          LATEST_TAG="${{ github.event.inputs.force_tag }}"
+        else
+          LATEST_TAG=$(curl -s https://api.github.com/repos/openwrt/openwrt/releases/latest | jq -r .tag_name)
+        fi
+        echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+        
+        # 尝试获取上次构建记录的 tag
+        LAST_TAG=""
+        if [ -f ".last_built_tag" ]; then
+          LAST_TAG=$(cat .last_built_tag)
+        fi
+        
+        echo "Latest OpenWrt release: ${LATEST_TAG}"
+        echo "Last built tag: ${LAST_TAG:-none}"
+        
+        # 判断是否需要构建
+        SHOULD_BUILD="false"
+        # 如果是手动触发或者有强制 tag，总是构建
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -n "${{ github.event.inputs.force_tag }}" ]; then
+          SHOULD_BUILD="true"
+          echo "Manual trigger or force tag detected, will build"
+        # 如果是 push 或 watch 事件，总是构建
+        elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "watch" ]; then
+          SHOULD_BUILD="true"
+          echo "Push or watch event, will build"
+        # 如果是定时任务，检查是否有新 tag
+        elif [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${LATEST_TAG}" != "${LAST_TAG}" ]; then
+            SHOULD_BUILD="true"
+            echo "New release detected (${LAST_TAG} -> ${LATEST_TAG}), will build"
+          else
+            SHOULD_BUILD="false"
+            echo "No new release, skipping build"
+          fi
+        else
+          SHOULD_BUILD="true"
+          echo "Unknown event type, will build"
+        fi
+        
+        echo "should_build=${SHOULD_BUILD}" >> $GITHUB_OUTPUT
+
   build:
+    needs: check-release
     runs-on: ubuntu-24.04
-    if: github.event.repository.owner.id == github.event.sender.id
+    if: |
+      (github.event.repository.owner.id == github.event.sender.id || github.event_name == 'schedule') &&
+      needs.check-release.outputs.should_build == 'true'
 
     steps:
     - name: Show system
@@ -29,6 +96,10 @@ jobs:
         remove-codeql: 'true'
     - name: Checkout
       uses: actions/checkout@main
+    - name: Set OpenWrt tag
+      run: |
+        echo "OPENWRT_TAG=${{ needs.check-release.outputs.latest_tag }}" >> $GITHUB_ENV
+        echo "Building with OpenWrt tag: ${{ needs.check-release.outputs.latest_tag }}"
     - name: Init build dependencies
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -45,13 +116,13 @@ jobs:
         sudo -E git config --global core.abbrev auto
         df -h
     - name: prepare
+      env:
+        OPENWRT_TAG: ${{ needs.check-release.outputs.latest_tag }}
       run: |
         bash ./scripts/prepare.sh
-    - name: Get Architecture
-      working-directory: ${{ github.workspace }}/openwrt
+    - name: Set tag_name for release
       run: |
-        tag_name=$(curl --silent "https://api.github.com/repos/openwrt/openwrt/releases/latest" | jq -r .tag_name)
-        echo "tag_name=${tag_name}" >>$GITHUB_ENV
+        echo "tag_name=${{ needs.check-release.outputs.latest_tag }}" >>$GITHUB_ENV
     - name: Make Download
       run: |
         cd openwrt
@@ -91,6 +162,21 @@ jobs:
         name: OpenWRT_${{ env.tag_name }}
         path: ./artifact/
 
+    - name: Save built tag
+      run: |
+        echo "${{ needs.check-release.outputs.latest_tag }}" > .last_built_tag
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git config pull.rebase false
+        git pull origin ${{ github.ref_name }} || true
+        git add .last_built_tag
+        # 只在有变化时提交
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "chore: Update last built tag to ${{ needs.check-release.outputs.latest_tag }}"
+          git push origin ${{ github.ref_name }} || echo "Failed to push tag file, but continuing..."
+        fi
     - name: Create release
       id: create_release
       uses: ncipollo/release-action@v1.14.0
