@@ -51,4 +51,19 @@ Temporary Items
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,macos
 
+### OpenWrt / ImmortalWrt Build ###
+# 完整编译产物目录
 openwrt
+
+# ImageBuilder 构建产物目录
+imagebuilder/
+output/
+
+# 构建临时文件
+*.tar.zst
+*.tar.xz
+*.tar.gz
+*.tar.bz2
+
+# 工作流生成的文件（可选，如果想提交则注释掉）
+# .last_built_tag
