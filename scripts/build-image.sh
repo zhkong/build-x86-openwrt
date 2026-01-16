@@ -62,16 +62,42 @@ download_imagebuilder() {
     echo "==========================================" >&2
     
     if [ ! -f "$filename" ]; then
-        # 尝试下载
-        if ! curl -L -o "$filename" "$url"; then
+        # 尝试下载 .zst 格式
+        if ! curl -L -f -o "$filename" "$url" 2>/dev/null; then
             # 如果 .zst 不存在，尝试 .tar.xz
             url="https://downloads.immortalwrt.org/releases/${version}/targets/${TARGET}/${SUBTARGET}/immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.xz"
             filename="immortalwrt-imagebuilder-${version}-${TARGET}-${SUBTARGET}.Linux-x86_64.tar.xz"
             echo "尝试备用格式: $url" >&2
-            curl -L -o "$filename" "$url"
+            if ! curl -L -f -o "$filename" "$url"; then
+                echo "错误: 无法下载 ImageBuilder（已尝试 .tar.zst 和 .tar.xz 格式）" >&2
+                exit 1
+            fi
         fi
     else
         echo "ImageBuilder 已存在，跳过下载" >&2
+    fi
+    
+    # 验证文件是否存在且不为空
+    if [ ! -f "$filename" ] || [ ! -s "$filename" ]; then
+        echo "错误: 下载的文件不存在或为空: $filename" >&2
+        exit 1
+    fi
+    
+    # 检测文件实际类型（通过 file 命令或 magic bytes）
+    local file_type=""
+    if command -v file &> /dev/null; then
+        file_type=$(file -b "$filename" 2>/dev/null || echo "")
+    fi
+    
+    # 如果文件类型检测失败，尝试通过文件头判断
+    if [ -z "$file_type" ]; then
+        local first_bytes=$(head -c 4 "$filename" 2>/dev/null | od -An -tx1 | tr -d ' \n')
+        case "$first_bytes" in
+            "28b52f"*|"28b5"*) file_type="Zstandard" ;;  # ZST magic: 28 B5 2F FD
+            "fd377a"*|"1f8b"*) file_type="xz" ;;         # XZ magic: FD 37 7A 58 或 gzip: 1F 8B
+            *) file_type="unknown" ;;
+        esac
+        echo "通过文件头检测: $first_bytes -> $file_type" >&2
     fi
     
     # 解压
@@ -89,16 +115,61 @@ download_imagebuilder() {
     
     if [ "$need_extract" = true ]; then
         echo "解压 ImageBuilder..." >&2
-        if [[ "$filename" == *.zst ]]; then
-            if ! tar --use-compress-program=unzstd -xf "$filename"; then
-                echo "错误: 解压失败" >&2
-                exit 1
+        echo "文件: $filename" >&2
+        echo "检测到的文件类型: ${file_type:-unknown}" >&2
+        
+        local extract_success=false
+        
+        # 根据文件扩展名和实际类型选择解压方法
+        if [[ "$filename" == *.zst ]] || [[ "$file_type" == *"Zstandard"* ]]; then
+            # 尝试使用 zstd 解压
+            if command -v zstd &> /dev/null; then
+                echo "使用 zstd 解压..." >&2
+                if zstd -dc "$filename" | tar -xf -; then
+                    extract_success=true
+                fi
+            fi
+            
+            # 如果 zstd 失败，尝试使用 unzstd
+            if [ "$extract_success" != "true" ] && command -v unzstd &> /dev/null; then
+                echo "使用 unzstd 解压..." >&2
+                if tar --use-compress-program=unzstd -xf "$filename"; then
+                    extract_success=true
+                fi
+            fi
+            
+            # 如果都失败了，尝试其他格式
+            if [ "$extract_success" != "true" ]; then
+                echo "警告: .zst 格式解压失败，尝试作为 .tar.xz 处理..." >&2
+                if tar -xJf "$filename" 2>/dev/null; then
+                    extract_success=true
+                elif tar -xf "$filename" 2>/dev/null; then
+                    extract_success=true
+                fi
+            fi
+        elif [[ "$filename" == *.xz ]] || [[ "$file_type" == *"xz"* ]]; then
+            echo "使用 tar -xJf 解压..." >&2
+            if tar -xJf "$filename"; then
+                extract_success=true
+            elif tar -xf "$filename"; then
+                extract_success=true
             fi
         else
-            if ! tar -xf "$filename"; then
-                echo "错误: 解压失败" >&2
-                exit 1
+            # 尝试通用解压方法
+            echo "尝试通用解压方法..." >&2
+            if tar -xf "$filename" 2>/dev/null; then
+                extract_success=true
+            elif tar -xJf "$filename" 2>/dev/null; then
+                extract_success=true
             fi
+        fi
+        
+        if [ "$extract_success" != "true" ]; then
+            echo "错误: 解压失败" >&2
+            echo "文件大小: $(du -h "$filename" | cut -f1)" >&2
+            echo "文件类型检测: $file_type" >&2
+            echo "请检查文件是否完整或尝试手动下载" >&2
+            exit 1
         fi
     fi
     
