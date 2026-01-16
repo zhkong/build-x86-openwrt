@@ -181,16 +181,41 @@ build_firmware() {
     echo "Makefile 存在，继续构建..."
     echo ""
     
-    # 禁用 qcow2 镜像格式（避免构建错误）
-    echo "禁用 qcow2 镜像格式..."
+    # 禁用所有不需要的镜像格式，只保留 squashfs BIOS 镜像
+    echo "优化镜像格式配置..."
     if [ -f ".config" ]; then
-        # 移除现有的 CONFIG_QCOW2_IMAGES 配置
+        # 移除现有的镜像格式配置
         sed -i '/^CONFIG_QCOW2_IMAGES=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_VDI_IMAGES=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_VMDK_IMAGES=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_VHDX_IMAGES=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_ISO_IMAGES=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_TARGET_ROOTFS_EXT4FS=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_GRUB_EFI_IMAGES=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_TARGET_ROOTFS_TARGZ=/d' .config 2>/dev/null || true
+        
         # 添加禁用配置
         echo "# CONFIG_QCOW2_IMAGES is not set" >> .config
-        echo "已禁用 qcow2 镜像格式"
+        echo "# CONFIG_VDI_IMAGES is not set" >> .config
+        echo "# CONFIG_VMDK_IMAGES is not set" >> .config
+        echo "# CONFIG_VHDX_IMAGES is not set" >> .config
+        echo "# CONFIG_ISO_IMAGES is not set" >> .config
+        echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
+        echo "# CONFIG_GRUB_EFI_IMAGES is not set" >> .config
+        echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
+        
+        # 重新生成配置以确保更改生效
+        echo "重新生成配置..."
+        make defconfig >/dev/null 2>&1 || true
+        
+        echo "已禁用以下格式："
+        echo "  - 虚拟化镜像（qcow2, vdi, vmdk, vhdx, iso）"
+        echo "  - ext4 镜像格式"
+        echo "  - EFI 镜像格式"
+        echo "  - tar.gz 根文件系统归档"
+        echo "只保留：squashfs BIOS 镜像"
     else
-        echo "警告: 未找到 .config 文件，将尝试通过其他方式禁用 qcow2"
+        echo "警告: 未找到 .config 文件"
     fi
     
     # 获取软件包列表

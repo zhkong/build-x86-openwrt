@@ -1,4 +1,4 @@
-name: X86 OpenWRT Build
+name: X86 OpenWRT Build (ImageBuilder)
 
 on:
   # 每天 UTC 时间凌晨 2 点检查是否有新 release
@@ -26,14 +26,14 @@ jobs:
       uses: actions/checkout@main
       with:
         fetch-depth: 1
-    - name: Check for new OpenWrt release
+    - name: Check for new ImmortalWrt release
       id: check
       run: |
-        # 获取最新的 OpenWrt release tag
+        # 获取最新的 ImmortalWrt release tag
         if [ -n "${{ github.event.inputs.force_tag }}" ]; then
           LATEST_TAG="${{ github.event.inputs.force_tag }}"
         else
-          LATEST_TAG=$(curl -s https://api.github.com/repos/openwrt/openwrt/releases/latest | jq -r .tag_name)
+          LATEST_TAG=$(curl -s https://api.github.com/repos/immortalwrt/immortalwrt/releases/latest | jq -r .tag_name)
         fi
         echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
         
@@ -43,7 +43,7 @@ jobs:
           LAST_TAG=$(cat .last_built_tag)
         fi
         
-        echo "Latest OpenWrt release: ${LATEST_TAG}"
+        echo "Latest ImmortalWrt release: ${LATEST_TAG}"
         echo "Last built tag: ${LAST_TAG:-none}"
         
         # 判断是否需要构建
@@ -96,55 +96,29 @@ jobs:
         remove-codeql: 'true'
     - name: Checkout
       uses: actions/checkout@main
-    - name: Set OpenWrt tag
+    - name: Set ImmortalWrt tag
       run: |
-        echo "OPENWRT_TAG=${{ needs.check-release.outputs.latest_tag }}" >> $GITHUB_ENV
-        echo "Building with OpenWrt tag: ${{ needs.check-release.outputs.latest_tag }}"
-    - name: Init build dependencies
+        echo "IMMORTALWRT_TAG=${{ needs.check-release.outputs.latest_tag }}" >> $GITHUB_ENV
+        echo "Building with ImmortalWrt tag: ${{ needs.check-release.outputs.latest_tag }}"
+    - name: Install dependencies
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo -E apt-get -qq update
-        sudo /bin/bash -c "$(curl -sL https://git.io/vokNn)"
-        sudo -E apt-fast -y -qq install asciidoc bash bcc bin86 binutils bison bzip2 clang-15 llvm-15 clang llvm file flex g++ g++-multilib gawk gcc gcc-multilib gettext git gzip help2man intltool libboost-dev libelf-dev libncurses-dev libncurses5-dev libssl-dev libthread-queue-any-perl libusb-dev libxml-parser-perl make patch perl-modules python3-dev python3-pip python3-pyelftools python3-setuptools rsync sharutils swig time unzip util-linux wget xsltproc zlib1g-dev zip zstd
-        sudo -E apt-fast -y -qq install dos2unix dwarves quilt npm jq
-        sudo -E npm install -g pnpm
-        pip3 install --user -U pylibfdt --break-system-packages
+        sudo -E apt-get -y -qq install curl tar zstd git make
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo -E git config --global user.name 'GitHub Actions' && git config --global user.email 'noreply@github.com'
         sudo -E git config --global core.abbrev auto
         df -h
-    - name: prepare
-      env:
-        OPENWRT_TAG: ${{ needs.check-release.outputs.latest_tag }}
-      run: |
-        bash ./scripts/prepare.sh
     - name: Set tag_name for release
       run: |
         echo "tag_name=${{ needs.check-release.outputs.latest_tag }}" >>$GITHUB_ENV
-    - name: Make Download
+    - name: Build with ImageBuilder
+      env:
+        IMMORTALWRT_TAG: ${{ needs.check-release.outputs.latest_tag }}
       run: |
-        cd openwrt
-        make download -j50
-    - name: Make Defconfig
-      run: |
-        cd openwrt
-        make defconfig
-    - name: Compile Openwrt
-      id: compileopenwrt
-      continue-on-error: true
-      run: |
-        cd openwrt
-        #echo | make kernel_oldconfig -j$(($(nproc) + 1)) 
-        IGNORE_ERRORS=1 make -j$(($(nproc) + 1))
-        echo $?
-    - name: If Error
-      if: steps.compileopenwrt.outcome == 'failure'
-      run: |
-        cat openwrt/.config
-        echo '================================================================'
-        cd openwrt && make -j1 V=s
+        bash ./scripts/build-image.sh
     - name: Print Disk Space After
       run: df -h
     - name: Organize files
@@ -152,14 +126,15 @@ jobs:
       run: |
         rm -rf ./artifact/
         mkdir -p ./artifact/
-        mv openwrt/bin/targets/x86/64/openwrt-*gz ./artifact/
-        mv openwrt/bin/targets/x86/64/config.buildinfo ./artifact/
+        if [ -d output ] && [ "$(ls -A output 2>/dev/null)" ]; then
+          mv output/* ./artifact/ 2>/dev/null || true
+        fi
         cd ./artifact/
         ls -Ahl
     - name: Upload artifact
       uses: actions/upload-artifact@main
       with:
-        name: OpenWRT_${{ env.tag_name }}
+        name: ImmortalWrt_${{ env.tag_name }}_ImageBuilder
         path: ./artifact/
 
     - name: Save built tag
@@ -174,7 +149,7 @@ jobs:
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
-          git commit -m "chore: Update last built tag to ${{ needs.check-release.outputs.latest_tag }}"
+          git commit -m "chore: Update last built tag to ${{ needs.check-release.outputs.latest_tag }} (ImageBuilder)"
           git push origin ${{ github.ref_name }} || echo "Failed to push tag file, but continuing..."
         fi
     - name: Create release
