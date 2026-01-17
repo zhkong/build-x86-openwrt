@@ -346,6 +346,164 @@ download_imagebuilder() {
     echo "$abs_path"
 }
 
+# ==================== 下载 OpenClash 核心文件 ====================
+download_openclash_core() {
+    local files_dir="$1"
+    
+    if [ -z "$files_dir" ]; then
+        echo "错误: 未指定文件目录" >&2
+        return 1
+    fi
+    
+    echo "=========================================="
+    echo "下载 OpenClash 核心文件..."
+    echo "目标目录: $files_dir/etc/openclash/core"
+    echo "=========================================="
+    
+    # 创建核心文件目录
+    mkdir -p "$files_dir/etc/openclash/core"
+    
+    # 临时目录用于下载和解压
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir" || {
+        echo "错误: 无法创建临时目录" >&2
+        return 1
+    }
+    
+    # 清理函数：退出时清理临时目录
+    cleanup() {
+        cd / >/dev/null 2>&1
+        rm -rf "$temp_dir" 2>/dev/null || true
+    }
+    trap cleanup EXIT INT TERM
+    
+    local download_success=true
+    
+    # 确定下载工具（优先使用 curl，备选 wget）
+    local download_cmd=""
+    if command -v curl &> /dev/null; then
+        download_cmd="curl"
+    elif command -v wget &> /dev/null; then
+        download_cmd="wget"
+    else
+        echo "错误: 未找到 curl 或 wget 下载工具" >&2
+        cleanup
+        return 1
+    fi
+    
+    # 下载函数（统一处理 curl 和 wget）
+    download_file() {
+        local url="$1"
+        local output="$2"
+        if [ "$download_cmd" = "curl" ]; then
+            curl -L -f -s --connect-timeout 30 --max-time 300 "$url" -o "$output" 2>/dev/null
+        else
+            wget -q --timeout=30 --tries=3 "$url" -O "$output" 2>/dev/null
+        fi
+    }
+    
+    # 1. 下载 clash (dev 版本)
+    echo "正在下载 clash (dev 版本)..."
+    if download_file \
+        "https://raw.githubusercontent.com/vernesong/OpenClash/core/master/dev/clash-linux-amd64.tar.gz" \
+        "clash-dev.tar.gz"; then
+        if tar -xzf clash-dev.tar.gz -C . 2>/dev/null && [ -f "./clash" ]; then
+            chmod +x ./clash
+            mv ./clash "$files_dir/etc/openclash/core/clash"
+            echo "  ✓ clash (dev) 下载成功"
+        else
+            echo "  ✗ clash (dev) 解压失败"
+            download_success=false
+        fi
+        rm -f clash-dev.tar.gz
+    else
+        echo "  ✗ clash (dev) 下载失败"
+        download_success=false
+    fi
+    
+    # 2. 下载 clash_tun (premium 版本)
+    echo "正在下载 clash_tun (premium 版本)..."
+    # 尝试获取最新的 premium 版本文件名
+    local premium_url=""
+    local premium_filename=$(curl -s https://api.github.com/repos/Dreamacro/clash/releases/latest 2>/dev/null | \
+        grep -o '"browser_download_url": *"[^"]*clash-linux-amd64[^"]*\.gz"' | \
+        head -1 | sed 's/"browser_download_url": *"//;s/"//' || echo "")
+    
+    # 如果没有获取到，使用固定版本
+    if [ -z "$premium_filename" ]; then
+        premium_url="https://raw.githubusercontent.com/vernesong/OpenClash/core/master/premium/clash-linux-amd64-2023.08.17-13-gdcc8d87.gz"
+    else
+        premium_url="$premium_filename"
+    fi
+    
+    if download_file "$premium_url" "clash_tun.gz"; then
+        if gzip -d clash_tun.gz 2>/dev/null && [ -f "./clash_tun" ]; then
+            chmod +x ./clash_tun
+            mv ./clash_tun "$files_dir/etc/openclash/core/clash_tun"
+            echo "  ✓ clash_tun (premium) 下载成功"
+        else
+            echo "  ✗ clash_tun (premium) 解压失败"
+            download_success=false
+        fi
+    else
+        echo "  ✗ clash_tun (premium) 下载失败"
+        download_success=false
+    fi
+    
+    # 3. 下载 clash_meta (meta 版本)
+    echo "正在下载 clash_meta (meta 版本)..."
+    if download_file \
+        "https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-amd64.tar.gz" \
+        "clash-meta.tar.gz"; then
+        if tar -xzf clash-meta.tar.gz -C . 2>/dev/null && [ -f "./clash" ]; then
+            chmod +x ./clash
+            mv ./clash "$files_dir/etc/openclash/core/clash_meta"
+            echo "  ✓ clash_meta 下载成功"
+        else
+            echo "  ✗ clash_meta 解压失败"
+            download_success=false
+        fi
+        rm -f clash-meta.tar.gz
+    else
+        echo "  ✗ clash_meta 下载失败"
+        download_success=false
+    fi
+    
+    # 清理临时目录
+    cleanup
+    trap - EXIT INT TERM
+    
+    # 验证下载结果
+    echo ""
+    echo "OpenClash 核心文件下载完成："
+    local core_dir="$files_dir/etc/openclash/core"
+    if [ -f "$core_dir/clash" ]; then
+        echo "  ✓ clash (dev): $(du -h "$core_dir/clash" | cut -f1)"
+    else
+        echo "  ✗ clash (dev): 缺失"
+    fi
+    
+    if [ -f "$core_dir/clash_tun" ]; then
+        echo "  ✓ clash_tun (premium): $(du -h "$core_dir/clash_tun" | cut -f1)"
+    else
+        echo "  ✗ clash_tun (premium): 缺失"
+    fi
+    
+    if [ -f "$core_dir/clash_meta" ]; then
+        echo "  ✓ clash_meta: $(du -h "$core_dir/clash_meta" | cut -f1)"
+    else
+        echo "  ✗ clash_meta: 缺失"
+    fi
+    
+    if [ "$download_success" = "false" ]; then
+        echo ""
+        echo "警告: 部分 OpenClash 核心文件下载失败，但不影响构建"
+        echo "用户可以在固件启动后通过 LuCI 界面手动下载"
+    fi
+    
+    echo "=========================================="
+}
+
 # ==================== 构建固件 ====================
 build_firmware() {
     local imagebuilder_dir="$1"
@@ -515,6 +673,11 @@ main() {
     # 创建自定义文件
     echo "创建自定义文件..."
     bash "$SCRIPT_DIR/setup-imagebuilder-files.sh" "$FILES_DIR"
+    echo ""
+    
+    # 下载 OpenClash 核心文件
+    echo "下载 OpenClash 核心文件..."
+    download_openclash_core "$FILES_DIR"
     echo ""
     
     # 构建固件
