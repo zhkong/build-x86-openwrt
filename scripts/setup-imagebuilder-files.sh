@@ -22,6 +22,27 @@ echo "=========================================="
 rm -rf "$FILES_DIR"
 mkdir -p "$FILES_DIR"
 
+# 复制项目根目录下的 files 目录内容（如果存在）
+PROJECT_FILES_DIR="$PROJECT_DIR/files"
+if [ -d "$PROJECT_FILES_DIR" ]; then
+    echo ""
+    echo "[0/2] 复制项目自定义文件..."
+    echo "  源目录: $PROJECT_FILES_DIR"
+    echo "  目标目录: $FILES_DIR"
+    cp -r "$PROJECT_FILES_DIR"/* "$FILES_DIR/" 2>/dev/null || {
+        # 如果 cp -r 失败，尝试使用 rsync 或逐个文件复制
+        if command -v rsync &> /dev/null; then
+            rsync -av "$PROJECT_FILES_DIR/" "$FILES_DIR/"
+        else
+            find "$PROJECT_FILES_DIR" -type f -exec sh -c 'mkdir -p "$(dirname "$2")" && cp "$1" "$2"' _ {} "$FILES_DIR/{}" \;
+        fi
+    }
+    echo "  ✓ 项目自定义文件复制完成"
+else
+    echo ""
+    echo "[0/2] 跳过项目自定义文件复制（目录不存在: $PROJECT_FILES_DIR）"
+fi
+
 # ==================== 终端工具配置 ====================
 setup_terminal_tools() {
     echo ""
