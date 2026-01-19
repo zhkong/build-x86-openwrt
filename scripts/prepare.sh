@@ -21,10 +21,6 @@ cd openwrt
 ## openwrt-nikki
 # echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> feeds.conf.default
 
-## openclash
-git clone https://github.com/vernesong/OpenClash.git --single-branch --depth 1 package/new/luci-app-openclash
-bash ../scripts/download-openclash-core.sh
-
 ## argon theme
 git clone https://github.com/jerrykuku/luci-theme-argon.git --single-branch --depth 1 package/new/luci-theme-argon
 

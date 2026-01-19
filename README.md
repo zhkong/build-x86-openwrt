@@ -16,7 +16,7 @@
 - 🤖 **自动化构建**：GitHub Actions 自动检查新版本并构建固件
 - 🇨🇳 **中文支持**：预装中文语言包，LuCI 界面全中文
 - 🔧 **旁路由优化**：专门为旁路由场景优化，移除不必要的功能
-- 📦 **预装软件**：包含 OpenClash、ttyd、Zsh 等常用工具
+- 📦 **预装软件**：包含 ttyd、Zsh 等常用工具
 - ⚡ **精简高效**：移除 WiFi、USB、IPv6 等不需要的功能，固件体积更小
 
 ## 🎯 固件特点
@@ -24,7 +24,6 @@
 ### 预装软件包
 
 - **LuCI Web 界面**：完整的 LuCI 管理界面，支持 HTTPS
-- **OpenClash**：强大的代理工具，支持多种代理协议
 - **ttyd**：Web 终端，支持在浏览器中直接操作路由器
 - **Zsh + Oh-My-Zsh**：现代化的 Shell 环境，提升命令行体验
 - **中文语言包**：LuCI 界面完全中文化
@@ -54,7 +53,6 @@ build-x86-openwrt/
 ├── scripts/
 │   ├── build-image.sh            # 主构建脚本
 │   ├── setup-imagebuilder-files.sh  # 创建自定义文件脚本
-│   ├── download-openclash-core.sh   # 下载 OpenClash 核心文件
 │   ├── fix-argon-css.sh          # 修复 Argon 主题 CSS
 │   ├── preset-terminal-tools.sh  # 预设终端工具（已废弃）
 │   └── prepare.sh                # 准备脚本
@@ -205,15 +203,11 @@ config interface 'lan'
    - LAN 接口 DHCP 已禁用（`option ignore '1'`）
    - 建议在 LuCI 中进一步配置防火墙规则
 
-3. **OpenClash 使用**：
-   - OpenClash 已预装，但核心文件需要单独下载
-   - 首次使用时需要在 LuCI 界面下载 OpenClash 核心
-
-4. **磁盘分区**：
+3. **磁盘分区**：
    - 内核分区大小：64 MB
    - 根文件系统分区大小：500 MB
 
-5. **构建时间**：
+4. **构建时间**：
    - GitHub Actions 构建时间约 10-20 分钟
    - 本地构建时间取决于网络速度和磁盘 I/O
 
@@ -228,7 +222,6 @@ config interface 'lan'
 ## 🙏 致谢
 
 - [ImmortalWrt](https://github.com/immortalwrt/immortalwrt) - 优秀的 OpenWrt 分支
-- [OpenClash](https://github.com/vernesong/OpenClash) - 强大的代理工具
 - [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) - 强大的 Zsh 配置框架
 
 ## 📞 支持
