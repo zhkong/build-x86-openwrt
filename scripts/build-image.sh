@@ -390,7 +390,7 @@ build_firmware() {
     echo "Makefile 存在，继续构建..."
     echo ""
     
-    # 禁用所有不需要的镜像格式，只保留 squashfs BIOS 镜像
+    # 配置镜像格式：使用 ext4 文件系统，禁用虚拟化镜像
     echo "优化镜像格式配置..."
     if [ -f ".config" ]; then
         # 移除现有的镜像格式配置
@@ -400,16 +400,20 @@ build_firmware() {
         sed -i '/^CONFIG_VHDX_IMAGES=/d' .config 2>/dev/null || true
         sed -i '/^CONFIG_ISO_IMAGES=/d' .config 2>/dev/null || true
         sed -i '/^CONFIG_TARGET_ROOTFS_EXT4FS=/d' .config 2>/dev/null || true
+        sed -i '/^CONFIG_TARGET_ROOTFS_SQUASHFS=/d' .config 2>/dev/null || true
         sed -i '/^CONFIG_GRUB_EFI_IMAGES=/d' .config 2>/dev/null || true
         sed -i '/^CONFIG_TARGET_ROOTFS_TARGZ=/d' .config 2>/dev/null || true
+        sed -i '/^# CONFIG_TARGET_ROOTFS_EXT4FS/d' .config 2>/dev/null || true
+        sed -i '/^# CONFIG_TARGET_ROOTFS_SQUASHFS/d' .config 2>/dev/null || true
         
-        # 添加禁用配置
+        # 添加配置：启用 ext4，禁用 squashfs 和虚拟化镜像
         echo "# CONFIG_QCOW2_IMAGES is not set" >> .config
         echo "# CONFIG_VDI_IMAGES is not set" >> .config
         echo "# CONFIG_VMDK_IMAGES is not set" >> .config
         echo "# CONFIG_VHDX_IMAGES is not set" >> .config
         echo "# CONFIG_ISO_IMAGES is not set" >> .config
-        echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
+        echo "CONFIG_TARGET_ROOTFS_EXT4FS=y" >> .config
+        echo "# CONFIG_TARGET_ROOTFS_SQUASHFS is not set" >> .config
         echo "# CONFIG_GRUB_EFI_IMAGES is not set" >> .config
         echo "# CONFIG_TARGET_ROOTFS_TARGZ is not set" >> .config
         
@@ -417,12 +421,13 @@ build_firmware() {
         echo "重新生成配置..."
         make defconfig >/dev/null 2>&1 || true
         
-        echo "已禁用以下格式："
-        echo "  - 虚拟化镜像（qcow2, vdi, vmdk, vhdx, iso）"
-        echo "  - ext4 镜像格式"
-        echo "  - EFI 镜像格式"
-        echo "  - tar.gz 根文件系统归档"
-        echo "只保留：squashfs BIOS 镜像"
+        echo "已配置以下格式："
+        echo "  - 启用 ext4 文件系统"
+        echo "  - 禁用 squashfs 文件系统"
+        echo "  - 禁用虚拟化镜像（qcow2, vdi, vmdk, vhdx, iso）"
+        echo "  - 禁用 EFI 镜像格式"
+        echo "  - 禁用 tar.gz 根文件系统归档"
+        echo "只保留：ext4 BIOS 镜像"
     else
         echo "警告: 未找到 .config 文件"
     fi

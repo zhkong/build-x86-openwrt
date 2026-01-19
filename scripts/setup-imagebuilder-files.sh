@@ -26,7 +26,7 @@ mkdir -p "$FILES_DIR"
 PROJECT_FILES_DIR="$PROJECT_DIR/files"
 if [ -d "$PROJECT_FILES_DIR" ]; then
     echo ""
-    echo "[0/3] 复制项目自定义文件..."
+    echo "[0/4] 复制项目自定义文件..."
     echo "  源目录: $PROJECT_FILES_DIR"
     echo "  目标目录: $FILES_DIR"
     cp -r "$PROJECT_FILES_DIR"/* "$FILES_DIR/" 2>/dev/null || {
@@ -40,13 +40,13 @@ if [ -d "$PROJECT_FILES_DIR" ]; then
     echo "  ✓ 项目自定义文件复制完成"
 else
     echo ""
-    echo "[0/3] 跳过项目自定义文件复制（目录不存在: $PROJECT_FILES_DIR）"
+    echo "[0/4] 跳过项目自定义文件复制（目录不存在: $PROJECT_FILES_DIR）"
 fi
 
 # ==================== 终端工具配置 ====================
 setup_terminal_tools() {
     echo ""
-    echo "[1/3] 配置终端工具 (Zsh + Oh-My-Zsh)..."
+    echo "[1/4] 配置终端工具 (Zsh + Oh-My-Zsh)..."
     
     mkdir -p "$FILES_DIR/root"
     mkdir -p "$FILES_DIR/etc/profile.d"
@@ -133,7 +133,7 @@ PROFILE
 # ==================== 中文语言环境配置 ====================
 setup_chinese_locale() {
     echo ""
-    echo "[2/3] 配置中文语言环境..."
+    echo "[2/4] 配置中文语言环境..."
     
     # 创建 locale 配置目录
     mkdir -p "$FILES_DIR/etc/profile.d"
@@ -230,13 +230,58 @@ show_summary() {
     echo "  ✓ UTF-8 终端支持"
     echo "  ✓ 中文语言环境"
     echo "  ✓ Nikki 透明代理 (Mihomo)"
+    echo "  ✓ Metacubexd 控制面板"
     echo "=========================================="
+}
+
+# ==================== Nikki Dashboard 下载 ====================
+setup_nikki_dashboard() {
+    echo ""
+    echo "[3/4] 下载 Nikki 控制面板 (Metacubexd)..."
+    
+    local ui_dir="$FILES_DIR/etc/nikki/run/ui"
+    mkdir -p "$ui_dir"
+    
+    # 获取最新版本信息
+    echo "  获取最新版本信息..."
+    local release_info=$(curl -fsSL "https://api.github.com/repos/MetaCubeX/metacubexd/releases/latest" 2>/dev/null)
+    
+    if [ -z "$release_info" ]; then
+        echo "  警告: 无法获取版本信息，使用备用下载链接"
+        local download_url="https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+        local version="latest"
+    else
+        local version=$(echo "$release_info" | grep -oP '"tag_name":\s*"\K[^"]+' | head -1)
+        local download_url=$(echo "$release_info" | grep -oP '"browser_download_url":\s*"\K[^"]+compressed-dist\.tgz' | head -1)
+        
+        if [ -z "$download_url" ]; then
+            download_url="https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+        fi
+    fi
+    
+    echo "  版本: ${version:-latest}"
+    echo "  下载: $download_url"
+    
+    # 下载并解压
+    local tmp_file="/tmp/metacubexd.tgz"
+    if curl -fsSL -o "$tmp_file" "$download_url" 2>/dev/null; then
+        echo "  解压控制面板..."
+        tar -xzf "$tmp_file" -C "$ui_dir" 2>/dev/null
+        rm -f "$tmp_file"
+        
+        # 统计文件数量
+        local file_count=$(find "$ui_dir" -type f | wc -l)
+        echo "  ✓ Metacubexd 控制面板下载完成 ($file_count 个文件)"
+    else
+        echo "  警告: 下载失败，控制面板将需要手动安装"
+        echo "  可在路由器启动后访问 LuCI → 服务 → Nikki 下载"
+    fi
 }
 
 # ==================== Nikki Feed 配置 ====================
 setup_nikki_feed() {
     echo ""
-    echo "[3/3] 配置 Nikki 软件源..."
+    echo "[4/4] 配置 Nikki 软件源..."
     
     # 获取 ImageBuilder 目录
     local imagebuilder_dir="$PROJECT_DIR/imagebuilder"
@@ -297,6 +342,7 @@ setup_nikki_feed() {
 main() {
     setup_terminal_tools
     setup_chinese_locale
+    setup_nikki_dashboard
     setup_nikki_feed
     show_summary
 }

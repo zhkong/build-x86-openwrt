@@ -24,7 +24,7 @@
 ### 预装软件包
 
 - **LuCI Web 界面**：完整的 LuCI 管理界面，支持 HTTPS
-- **Nikki (OpenWrt-nikki)**：基于 Mihomo 的透明代理工具，支持多种代理协议
+- **Nikki (OpenWrt-nikki)**：基于 Mihomo 的透明代理工具，支持多种代理协议，预装 Metacubexd 控制面板
 - **ttyd**：Web 终端，支持在浏览器中直接操作路由器
 - **Zsh + Oh-My-Zsh**：现代化的 Shell 环境，提升命令行体验
 - **中文语言包**：LuCI 界面完全中文化
@@ -36,7 +36,7 @@
 - ❌ **IPv6**：完全禁用 IPv6 相关功能
 - ❌ **WiFi**：移除所有无线网络相关驱动和工具
 - ❌ **USB**：移除 USB 设备支持
-- ❌ **虚拟化镜像**：仅保留 BIOS 格式的 squashfs 镜像
+- ❌ **虚拟化镜像**：仅保留 BIOS 格式的 ext4 镜像
 - ❌ **编程语言**：移除 Python、Ruby、Perl、Node.js 等运行环境
 - ❌ **PPP**：移除 PPPoE 等拨号功能（旁路由不需要）
 - ❌ **声音/视频**：移除音频和视频相关内核模块
@@ -123,10 +123,9 @@ bash ./scripts/build-image.sh
 
 构建完成后，`output/` 目录将包含以下文件：
 
-- `immortalwrt-*-custom-x86-64-generic-squashfs-combined.img.gz`：**推荐使用**，BIOS 启动的完整固件
-- `immortalwrt-*-custom-x86-64-generic-squashfs-combined-efi.img.gz`：UEFI 启动的完整固件
-- `immortalwrt-*-custom-x86-64-generic-squashfs-rootfs.img.gz`：仅根文件系统镜像
-- `immortalwrt-*-custom-x86-64-generic-rootfs.tar.gz`：根文件系统压缩包
+- `immortalwrt-*-custom-x86-64-generic-ext4-combined.img.gz`：**推荐使用**，BIOS 启动的完整固件（ext4 文件系统）
+- `immortalwrt-*-custom-x86-64-generic-ext4-combined-efi.img.gz`：UEFI 启动的完整固件（ext4 文件系统）
+- `immortalwrt-*-custom-x86-64-generic-ext4-rootfs.img.gz`：仅根文件系统镜像
 - `immortalwrt-*-custom-x86-64-generic.manifest`：已安装软件包列表
 - `sha256sums`：文件校验和
 
