@@ -26,7 +26,7 @@ mkdir -p "$FILES_DIR"
 PROJECT_FILES_DIR="$PROJECT_DIR/files"
 if [ -d "$PROJECT_FILES_DIR" ]; then
     echo ""
-    echo "[0/2] 复制项目自定义文件..."
+    echo "[0/3] 复制项目自定义文件..."
     echo "  源目录: $PROJECT_FILES_DIR"
     echo "  目标目录: $FILES_DIR"
     cp -r "$PROJECT_FILES_DIR"/* "$FILES_DIR/" 2>/dev/null || {
@@ -40,13 +40,13 @@ if [ -d "$PROJECT_FILES_DIR" ]; then
     echo "  ✓ 项目自定义文件复制完成"
 else
     echo ""
-    echo "[0/2] 跳过项目自定义文件复制（目录不存在: $PROJECT_FILES_DIR）"
+    echo "[0/3] 跳过项目自定义文件复制（目录不存在: $PROJECT_FILES_DIR）"
 fi
 
 # ==================== 终端工具配置 ====================
 setup_terminal_tools() {
     echo ""
-    echo "[1/2] 配置终端工具 (Zsh + Oh-My-Zsh)..."
+    echo "[1/3] 配置终端工具 (Zsh + Oh-My-Zsh)..."
     
     mkdir -p "$FILES_DIR/root"
     mkdir -p "$FILES_DIR/etc/profile.d"
@@ -133,7 +133,7 @@ PROFILE
 # ==================== 中文语言环境配置 ====================
 setup_chinese_locale() {
     echo ""
-    echo "[2/2] 配置中文语言环境..."
+    echo "[2/3] 配置中文语言环境..."
     
     # 创建 locale 配置目录
     mkdir -p "$FILES_DIR/etc/profile.d"
@@ -229,13 +229,75 @@ show_summary() {
     echo "  ✓ Zsh 插件 (autosuggestions, syntax-highlighting, completions)"
     echo "  ✓ UTF-8 终端支持"
     echo "  ✓ 中文语言环境"
+    echo "  ✓ Nikki 透明代理 (Mihomo)"
     echo "=========================================="
+}
+
+# ==================== Nikki Feed 配置 ====================
+setup_nikki_feed() {
+    echo ""
+    echo "[3/3] 配置 Nikki 软件源..."
+    
+    # 获取 ImageBuilder 目录
+    local imagebuilder_dir="$PROJECT_DIR/imagebuilder"
+    local ib_dir=$(find "$imagebuilder_dir" -maxdepth 1 -type d -name "immortalwrt-imagebuilder-*" 2>/dev/null | head -1)
+    
+    if [ -z "$ib_dir" ] || [ ! -d "$ib_dir" ]; then
+        echo "  警告: 未找到 ImageBuilder 目录，跳过 Nikki feed 配置"
+        echo "  将在构建时自动配置"
+        return 0
+    fi
+    
+    local repos_conf="$ib_dir/repositories.conf"
+    local keys_dir="$ib_dir/keys"
+    
+    if [ ! -f "$repos_conf" ]; then
+        echo "  警告: 未找到 repositories.conf，跳过 Nikki feed 配置"
+        return 0
+    fi
+    
+    # 从 repositories.conf 获取版本信息
+    local version=$(grep -oP 'releases/\K[0-9]+\.[0-9]+\.[0-9]+' "$repos_conf" | head -1)
+    local arch=$(grep -oP 'packages/\K[^/]+(?=/base)' "$repos_conf" | head -1)
+    
+    if [ -z "$version" ] || [ -z "$arch" ]; then
+        echo "  警告: 无法从 repositories.conf 获取版本/架构信息"
+        echo "  使用默认值: version=24.10, arch=x86_64"
+        version="24.10"
+        arch="x86_64"
+    fi
+    
+    # 构建 nikki feed URL
+    local nikki_feed_url="https://nikkinikki.pages.dev/openwrt-${version%.*}/${arch}/nikki"
+    echo "  Nikki Feed URL: $nikki_feed_url"
+    
+    # 检查是否已添加 nikki feed
+    if grep -q "nikki" "$repos_conf"; then
+        echo "  Nikki feed 已存在，跳过"
+    else
+        # 在 imagebuilder 本地源之前添加 nikki feed
+        sed -i "/^src imagebuilder/i src/gz nikki ${nikki_feed_url}" "$repos_conf"
+        echo "  ✓ 已添加 Nikki feed 到 repositories.conf"
+    fi
+    
+    # 由于添加了第三方软件源（nikki），需要禁用签名检查
+    # ImageBuilder 的 usign 工具不支持运行时添加新公钥
+    echo "  配置软件包签名..."
+    if grep -q "^option check_signature" "$repos_conf"; then
+        sed -i 's/^option check_signature/# option check_signature/' "$repos_conf"
+        echo "  ✓ 已禁用软件包签名检查（第三方源需要）"
+    else
+        echo "  签名检查已禁用，跳过"
+    fi
+    
+    echo "  ✓ Nikki 软件源配置完成"
 }
 
 # ==================== 主程序 ====================
 main() {
     setup_terminal_tools
     setup_chinese_locale
+    setup_nikki_feed
     show_summary
 }
 

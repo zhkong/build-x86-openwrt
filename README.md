@@ -24,6 +24,7 @@
 ### 预装软件包
 
 - **LuCI Web 界面**：完整的 LuCI 管理界面，支持 HTTPS
+- **Nikki (OpenWrt-nikki)**：基于 Mihomo 的透明代理工具，支持多种代理协议
 - **ttyd**：Web 终端，支持在浏览器中直接操作路由器
 - **Zsh + Oh-My-Zsh**：现代化的 Shell 环境，提升命令行体验
 - **中文语言包**：LuCI 界面完全中文化
