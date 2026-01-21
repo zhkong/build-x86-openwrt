@@ -230,32 +230,32 @@ show_summary() {
     echo "  ✓ UTF-8 终端支持"
     echo "  ✓ 中文语言环境"
     echo "  ✓ Nikki 透明代理 (Mihomo)"
-    echo "  ✓ Metacubexd 控制面板"
+    echo "  ✓ YACD 控制面板"
     echo "=========================================="
 }
 
 # ==================== Nikki Dashboard 下载 ====================
 setup_nikki_dashboard() {
     echo ""
-    echo "[3/4] 下载 Nikki 控制面板 (Metacubexd)..."
+    echo "[3/4] 下载 Nikki 控制面板 (YACD)..."
     
     local ui_dir="$FILES_DIR/etc/nikki/run/ui"
     mkdir -p "$ui_dir"
     
     # 获取最新版本信息
     echo "  获取最新版本信息..."
-    local release_info=$(curl -fsSL "https://api.github.com/repos/MetaCubeX/metacubexd/releases/latest" 2>/dev/null)
+    local release_info=$(curl -fsSL "https://api.github.com/repos/haishanh/yacd/releases/latest" 2>/dev/null)
     
     if [ -z "$release_info" ]; then
         echo "  警告: 无法获取版本信息，使用备用下载链接"
-        local download_url="https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+        local download_url="https://github.com/haishanh/yacd/releases/latest/download/gh-pages.zip"
         local version="latest"
     else
         local version=$(echo "$release_info" | grep -oP '"tag_name":\s*"\K[^"]+' | head -1)
-        local download_url=$(echo "$release_info" | grep -oP '"browser_download_url":\s*"\K[^"]+compressed-dist\.tgz' | head -1)
+        local download_url=$(echo "$release_info" | grep -oP '"browser_download_url":\s*"\K[^"]+gh-pages\.zip' | head -1)
         
         if [ -z "$download_url" ]; then
-            download_url="https://github.com/MetaCubeX/metacubexd/releases/latest/download/compressed-dist.tgz"
+            download_url="https://github.com/haishanh/yacd/releases/latest/download/gh-pages.zip"
         fi
     fi
     
@@ -263,15 +263,21 @@ setup_nikki_dashboard() {
     echo "  下载: $download_url"
     
     # 下载并解压
-    local tmp_file="/tmp/metacubexd.tgz"
+    local tmp_file="/tmp/yacd.zip"
     if curl -fsSL -o "$tmp_file" "$download_url" 2>/dev/null; then
         echo "  解压控制面板..."
-        tar -xzf "$tmp_file" -C "$ui_dir" 2>/dev/null
+        unzip -q -o "$tmp_file" -d "$ui_dir" 2>/dev/null || {
+            # 如果解压失败，尝试移动gh-pages目录内容
+            if [ -d "$ui_dir/gh-pages" ]; then
+                mv "$ui_dir/gh-pages"/* "$ui_dir/" 2>/dev/null || true
+                rm -rf "$ui_dir/gh-pages" 2>/dev/null || true
+            fi
+        }
         rm -f "$tmp_file"
         
         # 统计文件数量
         local file_count=$(find "$ui_dir" -type f | wc -l)
-        echo "  ✓ Metacubexd 控制面板下载完成 ($file_count 个文件)"
+        echo "  ✓ YACD 控制面板下载完成 ($file_count 个文件)"
     else
         echo "  警告: 下载失败，控制面板将需要手动安装"
         echo "  可在路由器启动后访问 LuCI → 服务 → Nikki 下载"
