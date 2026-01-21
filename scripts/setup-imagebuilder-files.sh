@@ -231,6 +231,7 @@ show_summary() {
     echo "  ✓ 中文语言环境"
     echo "  ✓ Nikki 透明代理 (Mihomo)"
     echo "  ✓ YACD 控制面板"
+    echo "  ✓ Nikki 地理位置数据 (Country.mmdb, GeoSite.dat)"
     echo "=========================================="
 }
 
@@ -354,10 +355,60 @@ UCIEOF
     echo "  ✓ 已创建 mixin 配置和 UCI defaults 脚本，将在首次启动时设置 YACD 为默认 UI"
 }
 
+# ==================== Nikki 数据文件下载 ====================
+setup_nikki_geodata() {
+    echo ""
+    echo "[4/5] 下载 Nikki 地理位置数据文件..."
+    
+    local geodata_dir="$FILES_DIR/etc/nikki/run"
+    mkdir -p "$geodata_dir"
+    
+    # 下载 Country.mmdb (GeoIP 数据库)
+    echo "  下载 Country.mmdb..."
+    local mmdb_url="https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/country.mmdb"
+    local mmdb_file="$geodata_dir/Country.mmdb"
+    
+    if curl -fsSL --connect-timeout 30 --max-time 300 -o "$mmdb_file" "$mmdb_url" 2>/dev/null; then
+        local mmdb_size=$(stat -f%z "$mmdb_file" 2>/dev/null || stat -c%s "$mmdb_file" 2>/dev/null || echo "0")
+        if [ "$mmdb_size" -gt 100000 ]; then
+            echo "  ✓ Country.mmdb 下载完成 (${mmdb_size} 字节)"
+        else
+            echo "  ✗ 警告: Country.mmdb 文件过小，可能下载失败"
+            rm -f "$mmdb_file"
+        fi
+    else
+        echo "  ✗ 警告: Country.mmdb 下载失败，Nikki 将在启动时自动下载"
+    fi
+    
+    # 下载 GeoSite.dat
+    echo "  下载 GeoSite.dat..."
+    local geosite_url="https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat"
+    local geosite_file="$geodata_dir/GeoSite.dat"
+    
+    if curl -fsSL --connect-timeout 30 --max-time 300 -o "$geosite_file" "$geosite_url" 2>/dev/null; then
+        local geosite_size=$(stat -f%z "$geosite_file" 2>/dev/null || stat -c%s "$geosite_file" 2>/dev/null || echo "0")
+        if [ "$geosite_size" -gt 1000000 ]; then
+            echo "  ✓ GeoSite.dat 下载完成 (${geosite_size} 字节)"
+        else
+            echo "  ✗ 警告: GeoSite.dat 文件过小，可能下载失败"
+            rm -f "$geosite_file"
+        fi
+    else
+        echo "  ✗ 警告: GeoSite.dat 下载失败，Nikki 将在启动时自动下载"
+    fi
+    
+    # 检查是否至少有一个文件下载成功
+    if [ -f "$mmdb_file" ] || [ -f "$geosite_file" ]; then
+        echo "  ✓ 地理位置数据文件下载完成"
+    else
+        echo "  ✗ 警告: 地理位置数据文件下载失败，Nikki 将在启动时自动下载"
+    fi
+}
+
 # ==================== Nikki Feed 配置 ====================
 setup_nikki_feed() {
     echo ""
-    echo "[4/4] 配置 Nikki 软件源..."
+    echo "[5/5] 配置 Nikki 软件源..."
     
     # 获取 ImageBuilder 目录
     local imagebuilder_dir="$PROJECT_DIR/imagebuilder"
@@ -419,6 +470,7 @@ main() {
     setup_terminal_tools
     setup_chinese_locale
     setup_nikki_dashboard
+    setup_nikki_geodata
     setup_nikki_feed
     show_summary
 }
