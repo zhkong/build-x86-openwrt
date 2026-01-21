@@ -242,46 +242,116 @@ setup_nikki_dashboard() {
     local ui_dir="$FILES_DIR/etc/nikki/run/ui"
     mkdir -p "$ui_dir"
     
-    # 获取最新版本信息
-    echo "  获取最新版本信息..."
-    local release_info=$(curl -fsSL "https://api.github.com/repos/haishanh/yacd/releases/latest" 2>/dev/null)
-    
-    if [ -z "$release_info" ]; then
-        echo "  警告: 无法获取版本信息，使用备用下载链接"
-        local download_url="https://github.com/haishanh/yacd/releases/latest/download/gh-pages.zip"
-        local version="latest"
-    else
-        local version=$(echo "$release_info" | grep -oP '"tag_name":\s*"\K[^"]+' | head -1)
-        local download_url=$(echo "$release_info" | grep -oP '"browser_download_url":\s*"\K[^"]+gh-pages\.zip' | head -1)
-        
-        if [ -z "$download_url" ]; then
-            download_url="https://github.com/haishanh/yacd/releases/latest/download/gh-pages.zip"
-        fi
-    fi
-    
-    echo "  版本: ${version:-latest}"
+    # 从 gh-pages 分支下载 YACD
+    local download_url="https://github.com/haishanh/yacd/archive/gh-pages.zip"
     echo "  下载: $download_url"
     
     # 下载并解压
     local tmp_file="/tmp/yacd.zip"
-    if curl -fsSL -o "$tmp_file" "$download_url" 2>/dev/null; then
-        echo "  解压控制面板..."
-        unzip -q -o "$tmp_file" -d "$ui_dir" 2>/dev/null || {
-            # 如果解压失败，尝试移动gh-pages目录内容
-            if [ -d "$ui_dir/gh-pages" ]; then
-                mv "$ui_dir/gh-pages"/* "$ui_dir/" 2>/dev/null || true
-                rm -rf "$ui_dir/gh-pages" 2>/dev/null || true
-            fi
-        }
-        rm -f "$tmp_file"
+    local tmp_dir="/tmp/yacd_extract"
+    
+    # 清理可能存在的旧文件
+    rm -f "$tmp_file"
+    rm -rf "$tmp_dir"
+    
+    if curl -fsSL --connect-timeout 30 --max-time 300 -o "$tmp_file" "$download_url" 2>/dev/null; then
+        # 检查下载的文件大小
+        local file_size=$(stat -f%z "$tmp_file" 2>/dev/null || stat -c%s "$tmp_file" 2>/dev/null || echo "0")
+        if [ "$file_size" -lt 1000 ]; then
+            echo "  ✗ 警告: 下载的文件过小 ($file_size 字节)，可能下载失败"
+            rm -f "$tmp_file"
+        else
+            echo "  下载文件大小: ${file_size} 字节"
+            echo "  解压控制面板..."
+            mkdir -p "$tmp_dir"
         
-        # 统计文件数量
-        local file_count=$(find "$ui_dir" -type f | wc -l)
-        echo "  ✓ YACD 控制面板下载完成 ($file_count 个文件)"
+            # 解压到临时目录
+            if unzip -q -o "$tmp_file" -d "$tmp_dir" 2>/dev/null; then
+                # 查找解压后的目录（通常是 yacd-gh-pages）
+                local extracted_dir=$(find "$tmp_dir" -maxdepth 1 -type d -name "yacd-gh-pages" 2>/dev/null | head -1)
+                
+                if [ -n "$extracted_dir" ] && [ -d "$extracted_dir" ]; then
+                    # 移动解压后的所有文件到 UI 目录（包括隐藏文件）
+                    # 使用 find 确保包括隐藏文件
+                    find "$extracted_dir" -mindepth 1 -maxdepth 1 -exec mv {} "$ui_dir/" \; 2>/dev/null || true
+                    echo "  ✓ 文件已移动到目标目录"
+                else
+                    echo "  警告: 未找到预期的解压目录"
+                    # 列出临时目录内容以便调试
+                    echo "  临时目录内容:"
+                    ls -la "$tmp_dir" 2>/dev/null || true
+                    echo "  尝试直接解压到目标目录"
+                    unzip -q -o "$tmp_file" -d "$ui_dir" 2>/dev/null || true
+                fi
+                
+                # 清理临时文件
+                rm -rf "$tmp_dir"
+                rm -f "$tmp_file"
+                
+                # 统计文件数量
+                local file_count=$(find "$ui_dir" -type f 2>/dev/null | wc -l)
+                if [ "$file_count" -gt 0 ]; then
+                    echo "  ✓ YACD 控制面板下载完成 ($file_count 个文件)"
+                    
+                    # 配置 Nikki 默认 UI 为 YACD
+                    setup_nikki_default_ui
+                else
+                    echo "  ✗ 警告: 解压后未找到文件"
+                    echo "  目标目录内容:"
+                    ls -la "$ui_dir" 2>/dev/null || true
+                fi
+            else
+                echo "  ✗ 警告: 解压失败，可能需要安装 unzip"
+                rm -f "$tmp_file"
+                rm -rf "$tmp_dir"
+            fi
+        fi
     else
-        echo "  警告: 下载失败，控制面板将需要手动安装"
+        echo "  ✗ 警告: 下载失败，控制面板将需要手动安装"
         echo "  可在路由器启动后访问 LuCI → 服务 → Nikki 下载"
+        rm -f "$tmp_file"
     fi
+}
+
+# 配置 Nikki 默认 UI 为 YACD
+setup_nikki_default_ui() {
+    echo "  配置 Nikki 默认 UI 为 YACD..."
+    
+    # 创建 mixin 配置文件设置 external-ui
+    local mixin_dir="$FILES_DIR/etc/nikki"
+    mkdir -p "$mixin_dir"
+    
+    # 创建 mixin 配置文件，设置 external-ui 为 YACD
+    cat > "$mixin_dir/mixin.yaml" << 'MIXINEOF'
+# Nikki Mixin 配置
+# 设置默认 UI 为 YACD
+external-ui: /etc/nikki/run/ui
+MIXINEOF
+    
+    # 创建 UCI defaults 脚本，确保 UI 配置生效
+    mkdir -p "$FILES_DIR/usr/libexec/uci-defaults"
+    cat > "$FILES_DIR/usr/libexec/uci-defaults/99-set-nikki-ui-yacd" << 'UCIEOF'
+#!/bin/sh
+# 设置 Nikki 默认 UI 为 YACD
+# 检查 UI 目录是否存在
+if [ -d /etc/nikki/run/ui ] && [ "$(ls -A /etc/nikki/run/ui 2>/dev/null)" ]; then
+    # 确保 mixin 配置文件存在且设置正确
+    if [ ! -f /etc/nikki/mixin.yaml ] || ! grep -q "external-ui.*yacd\|external-ui.*/etc/nikki/run/ui" /etc/nikki/mixin.yaml 2>/dev/null; then
+        mkdir -p /etc/nikki
+        echo "external-ui: /etc/nikki/run/ui" >> /etc/nikki/mixin.yaml
+    fi
+    
+    # 如果 UCI 配置支持 external-ui，也尝试设置
+    if [ -f /etc/config/nikki ]; then
+        uci set nikki.config.external_ui='/etc/nikki/run/ui' 2>/dev/null && uci commit nikki 2>/dev/null || true
+    fi
+    
+    echo "Nikki default UI set to YACD"
+fi
+exit 0
+UCIEOF
+    chmod +x "$FILES_DIR/usr/libexec/uci-defaults/99-set-nikki-ui-yacd"
+    echo "  ✓ 已创建 mixin 配置和 UCI defaults 脚本，将在首次启动时设置 YACD 为默认 UI"
 }
 
 # ==================== Nikki Feed 配置 ====================
